@@ -73,7 +73,6 @@ train_batches = train_datagen.flow_from_directory(directory = train_img_path,
 valid_batches = valid_datagen.flow_from_directory(directory = val_img_path,
                                                   target_size = resize_wh,
                                                   interpolation = resize_opt,
-                                                  batch_size=hp_BatchSize,
                                                   class_mode='categorical'
                                                   )
 
@@ -82,14 +81,15 @@ from tensorflow.keras.applications import Xception
 base_model = Xception(include_top=False, weights='imagenet', input_tensor=None,
                input_shape=( resize_wh[0], resize_wh[1], img_color_chnl) )
 
-model = Sequential()
-model.add(base_model)
-model.add(Flatten())
+out = base_model.output
+out = Flatten()(out)
 # 增加 DropOut layer
 if(dropout_en):
-	model.add(Dropout(dropout_rate))
+  out = Dropout(dropout_rate)(out)
 # 增加 Dense layer，以 softmax 產生個類別的機率值
-model.add(Dense(num_class, activation="softmax"))
+out = Dense(num_class, activation="softmax")(out)
+
+model = Model(inputs=base_model.input, outputs=out)
 
 # 使用 Adam optimizer，以較低的 learning rate 進行 fine-tuning
 model.compile(optimizer=Adam(lr=hp_LearningRate),
@@ -102,7 +102,7 @@ print(model.summary())
 # 保存最好的權重
 if not os.path.isdir(outp_path):
     os.mkdir(outp_path)
-filepath = outp_path + "weights.best.hdf5"
+filepath = outp_path + "model.best.hdf5"
 checkpoint = ModelCheckpoint(filepath, verbose=1, monitor='val_accuracy', save_best_only=True, mode='auto')
 callbacks_list = [checkpoint]
 
@@ -111,12 +111,12 @@ print(train_batches.samples)
 history = model.fit_generator(train_batches,
 							steps_per_epoch = train_batches.samples * augment_ratio // hp_BatchSize,
 							validation_data = valid_batches,
-							validation_steps = valid_batches.samples // hp_BatchSize,
 							epochs = hp_Epochs,
 							callbacks=callbacks_list,
                             verbose=1)
 
 # 儲存模型
+"""
 if not os.path.isdir(outp_path):
     os.mkdir(outp_path)
 filepath = outp_path + "model.json"
@@ -126,6 +126,7 @@ with open(filepath, "w") as json_file:
 filepath = outp_path + "weights.finalEpoch.h5"
 model.save_weights(filepath)
 print("Saved model to disk")
+"""
 
 ###############################################
 # 繪製Model學習成效
